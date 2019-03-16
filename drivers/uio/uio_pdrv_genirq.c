@@ -106,11 +106,11 @@ static int uio_pdrv_genirq_probe(struct platform_device *pdev)
 		int irq;
 
 		/* alloc uioinfo for one device */
-		uioinfo = devm_kzalloc(&pdev->dev, sizeof(*uioinfo),
-				       GFP_KERNEL);
+		uioinfo = kzalloc(sizeof(*uioinfo), GFP_KERNEL);
 		if (!uioinfo) {
+			ret = -ENOMEM;
 			dev_err(&pdev->dev, "unable to kmalloc\n");
-			return -ENOMEM;
+			goto bad2;
 		}
 		uioinfo->name = pdev->dev.of_node->name;
 		uioinfo->version = "devicetree";
@@ -125,19 +125,20 @@ static int uio_pdrv_genirq_probe(struct platform_device *pdev)
 
 	if (!uioinfo || !uioinfo->name || !uioinfo->version) {
 		dev_err(&pdev->dev, "missing platform_data\n");
-		return ret;
+		goto bad0;
 	}
 
 	if (uioinfo->handler || uioinfo->irqcontrol ||
 	    uioinfo->irq_flags & IRQF_SHARED) {
 		dev_err(&pdev->dev, "interrupt configuration error\n");
-		return ret;
+		goto bad0;
 	}
 
-	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
+	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
 	if (!priv) {
+		ret = -ENOMEM;
 		dev_err(&pdev->dev, "unable to kmalloc\n");
-		return -ENOMEM;
+		goto bad0;
 	}
 
 	priv->uioinfo = uioinfo;
@@ -149,7 +150,7 @@ static int uio_pdrv_genirq_probe(struct platform_device *pdev)
 		ret = platform_get_irq(pdev, 0);
 		if (ret < 0) {
 			dev_err(&pdev->dev, "failed to get IRQ\n");
-			return ret;
+			goto bad0;
 		}
 		uioinfo->irq = ret;
 	}
@@ -205,12 +206,20 @@ static int uio_pdrv_genirq_probe(struct platform_device *pdev)
 	ret = uio_register_device(&pdev->dev, priv->uioinfo);
 	if (ret) {
 		dev_err(&pdev->dev, "unable to register uio device\n");
-		pm_runtime_disable(&pdev->dev);
-		return ret;
+		goto bad1;
 	}
 
 	platform_set_drvdata(pdev, priv);
 	return 0;
+ bad1:
+	kfree(priv);
+	pm_runtime_disable(&pdev->dev);
+ bad0:
+	/* kfree uioinfo for OF */
+	if (pdev->dev.of_node)
+		kfree(uioinfo);
+ bad2:
+	return ret;
 }
 
 static int uio_pdrv_genirq_remove(struct platform_device *pdev)
@@ -223,6 +232,11 @@ static int uio_pdrv_genirq_remove(struct platform_device *pdev)
 	priv->uioinfo->handler = NULL;
 	priv->uioinfo->irqcontrol = NULL;
 
+	/* kfree uioinfo for OF */
+	if (pdev->dev.of_node)
+		kfree(priv->uioinfo);
+
+	kfree(priv);
 	return 0;
 }
 
