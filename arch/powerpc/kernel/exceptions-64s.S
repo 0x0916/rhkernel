@@ -316,7 +316,7 @@ hv_hdecrementer_trampoline:
 	HMT_MEDIUM
 	SET_SCRATCH0(r13)
 	EXCEPTION_PROLOG_0(PACA_EXGEN)
-	b	hdecrementer_hv
+	b hdecrementer_hv
 
 	MASKABLE_EXCEPTION_PSERIES(0xa00, 0xa00, doorbell_super)
 	KVM_HANDLER_PR(PACA_EXGEN, EXC_STD, 0xa00)
@@ -778,12 +778,12 @@ stf_barrier_fallback:
 	sync
 	ld	r9,PACA_AUX_EXRFI+EX_R9(r13)
 	ld	r10,PACA_AUX_EXRFI+EX_R10(r13)
-	GET_PACA(r13);
 	ori	31,31,0
 	.rept 14
 	b	1f
 1:
 	.endr
+	GET_PACA(r13)
 	blr
 
 	.globl rfi_flush_fallback
