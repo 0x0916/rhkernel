@@ -24,6 +24,7 @@
 #include <linux/inetdevice.h>
 #include <linux/netdevice.h>
 #include <linux/slab.h>
+#include <linux/nospec.h>
 #include <net/sock.h>
 #include <net/ip.h>
 #include <net/icmp.h>
@@ -567,6 +568,8 @@ static int do_ip_setsockopt(struct sock *sk, int level,
 
 		if (optlen > 40)
 			goto e_inval;
+		optlen = array_index_nospec(optlen, 41);
+
 		err = ip_options_get_from_user(sock_net(sk), &opt,
 					       optval, optlen);
 		if (err)
@@ -877,7 +880,7 @@ static int do_ip_setsockopt(struct sock *sk, int level,
 			mreq.imr_multiaddr.s_addr = mreqs.imr_multiaddr;
 			mreq.imr_address.s_addr = mreqs.imr_interface;
 			mreq.imr_ifindex = 0;
-			err = ip_mc_join_group(sk, &mreq);
+			err = ip_mc_join_group_ssm(sk, &mreq, MCAST_INCLUDE);
 			if (err && err != -EADDRINUSE)
 				break;
 			omode = MCAST_INCLUDE;
@@ -954,7 +957,7 @@ static int do_ip_setsockopt(struct sock *sk, int level,
 			mreq.imr_multiaddr = psin->sin_addr;
 			mreq.imr_address.s_addr = 0;
 			mreq.imr_ifindex = greqs.gsr_interface;
-			err = ip_mc_join_group(sk, &mreq);
+			err = ip_mc_join_group_ssm(sk, &mreq, MCAST_INCLUDE);
 			if (err && err != -EADDRINUSE)
 				break;
 			greqs.gsr_interface = mreq.imr_ifindex;

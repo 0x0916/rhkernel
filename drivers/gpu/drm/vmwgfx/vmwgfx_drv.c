@@ -26,6 +26,7 @@
  **************************************************************************/
 #include <linux/module.h>
 #include <linux/console.h>
+#include <linux/nospec.h>
 
 #include <drm/drmP.h>
 #include "vmwgfx_drv.h"
@@ -1117,8 +1118,11 @@ static long vmw_generic_ioctl(struct file *filp, unsigned int cmd,
 
 	if ((nr >= DRM_COMMAND_BASE) && (nr < DRM_COMMAND_END)
 	    && (nr < DRM_COMMAND_BASE + dev->driver->num_ioctls)) {
-		const struct drm_ioctl_desc *ioctl =
-			&vmw_ioctls[nr - DRM_COMMAND_BASE];
+		const struct drm_ioctl_desc *ioctl;
+		unsigned int idx = array_index_nospec(nr - DRM_COMMAND_BASE,
+						      ARRAY_SIZE(vmw_ioctls));
+
+		ioctl = &vmw_ioctls[idx];
 
 		if (nr == DRM_COMMAND_BASE + DRM_VMW_EXECBUF) {
 			ret = (long) drm_ioctl_permit(ioctl->flags, file_priv);
@@ -1368,6 +1372,9 @@ static int vmwgfx_pm_notifier(struct notifier_block *nb, unsigned long val,
 
 	switch (val) {
 	case PM_HIBERNATION_PREPARE:
+		/* if we have any fifo resources just fail hibernate */
+		if (atomic_read(&dev_priv->num_fifo_resources) != 0)
+			return -ENOSYS;
 		if (dev_priv->enable_fb)
 			vmw_fb_off(dev_priv);
 		ttm_suspend_lock(&dev_priv->reservation_sem);
@@ -1384,6 +1391,8 @@ static int vmwgfx_pm_notifier(struct notifier_block *nb, unsigned long val,
 		break;
 	case PM_POST_HIBERNATION:
 	case PM_POST_RESTORE:
+		if (atomic_read(&dev_priv->num_fifo_resources) != 0)
+			return -ENOSYS;
 		vmw_fence_fifo_up(dev_priv->fman);
 		ttm_suspend_unlock(&dev_priv->reservation_sem);
 		if (dev_priv->enable_fb)
